@@ -1,16 +1,48 @@
-# Mago 온보딩 음성 AI Agent 데모
+# 🎧 Mago 온보딩 음성 AI Agent 데모
 
-Mago 신규 입사자를 위한 온보딩 음성 AI Agent 데모 서비스입니다.
-신규 입사자가 웹에서 데모 계정을 선택하면, AI Agent가 온보딩 퀘스트를 제시하고
-사용자는 **텍스트 또는 음성**으로 답변합니다. 답변은 OpenAI(또는 로컬 fallback)로
-평가되며, 퀘스트를 완료하면 배지와 진행률을 보여줍니다.
+<p align="center">
+  <img alt="React" src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white" />
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" />
+  <img alt="Vite" src="https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white" />
+  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-http-339933?logo=node.js&logoColor=white" />
+  <img alt="Mago STT" src="https://img.shields.io/badge/Mago-Speech--to--Text-FF6B81" />
+  <img alt="OpenAI" src="https://img.shields.io/badge/OpenAI-Chat%20Completions-412991?logo=openai&logoColor=white" />
+  <img alt="Notion" src="https://img.shields.io/badge/Notion-Context-000000?logo=notion&logoColor=white" />
+  <img alt="Status" src="https://img.shields.io/badge/status-demo-00D2A8" />
+</p>
+
+> Mago 신규 입사자를 위한 **온보딩 음성 AI Agent** 데모 서비스입니다.
+> 신규 입사자가 웹에서 데모 계정을 선택하면, AI Agent가 온보딩 퀘스트를 제시하고
+> 사용자는 **텍스트 또는 음성**으로 답변합니다. 답변은 OpenAI(또는 로컬 fallback)로
+> 평가되며, 퀘스트를 완료하면 **최종 평가 리포트 · 배지 · 진행률**을 보여줍니다.
+
+## ✨ 한눈에 보기
+
+```mermaid
+flowchart LR
+    A["👤 신규 입사자"] -->|"계정 선택"| B["💬 온보딩 채팅"]
+    B -->|"시작 버튼"| C["🧭 퀘스트 진행"]
+    C -->|"텍스트·음성 답변"| D["📝 답변"]
+    D --> E["🤖 AI 평가"]
+    E -->|"점수·피드백"| C
+    C -->|"퀘스트 종료"| F["📋 최종 리포트"]
+    F -->|"통과 시"| G["🏅 배지 획득"]
+    F -->|"다음 퀘스트 버튼"| C
+```
+
+신규 입사자는 퀘스트마다 **시작 버튼**으로 대화를 열고, 6개 질문을 끝내면
+**잘한 점 / 보완할 점**을 정리한 최종 리포트와 배지를 받습니다. 다음 퀘스트는
+**다음 퀘스트 버튼**을 눌러야 진행됩니다.
 
 ## 데모 기능
 
 - 데모 계정 선택 화면 (4개 계정)
 - 대화형 온보딩 화면 (퀘스트 / 질문 번호 / 점수 / 진행률 / 배지)
+- **퀘스트별 시작 · 다음 퀘스트 버튼**으로 진행 제어
+- **퀘스트 종료 시 최종 평가 리포트** (점수 · 배지 · 잘한 점 · 보완할 점)
 - 텍스트 답변 입력
 - 브라우저 `MediaRecorder` 녹음 → **16kHz / 16-bit / mono WAV** 변환 → Mago Speech-to-Text
+- 새 질문 시 마이크 자동 시작 + 음성 인식 후 자동 제출
 - OpenAI Chat Completions 평가 + 로컬 fallback 평가
 - Notion 온보딩 문서를 평가 컨텍스트로 사용
 - `localStorage` 진행 상태 저장 (새로고침해도 이어서 진행)
@@ -24,6 +56,74 @@ Mago 신규 입사자를 위한 온보딩 음성 AI Agent 데모 서비스입니
 - **AI 평가**: OpenAI Chat Completions API
 - **Notion**: REST API로 온보딩 문서 조회 (평가 컨텍스트 전용)
 - **상태 저장**: 데모에서는 `localStorage`
+
+## 🏗️ 아키텍처
+
+브라우저(React)는 Vite dev 서버의 `/api` 프록시를 통해 Node `http` 백엔드와
+통신하고, 백엔드는 외부 API(Mago STT / OpenAI / Notion)를 중계합니다.
+오디오 인코딩(16kHz WAV)과 퀘스트 정의는 **프론트엔드**에 있습니다.
+
+```mermaid
+flowchart TB
+    subgraph Browser["🌐 Browser · Vite + React"]
+        UI["App.tsx · 채팅·퀘스트 UI"]
+        REC["MediaRecorder → WAV 16kHz mono"]
+        STORE["localStorage · 세션 진행 상태"]
+        UI <--> REC
+        UI <--> STORE
+    end
+
+    subgraph Backend["🖥️ Node http 서버 :8787"]
+        H["GET /api/health"]
+        EV["POST /api/agent/evaluate"]
+        TR["POST /api/speech/transcribe"]
+        NO["GET /api/notion/onboarding"]
+    end
+
+    subgraph External["☁️ 외부 API"]
+        MAGO["Mago Speech-to-Text"]
+        OAI["OpenAI Chat Completions"]
+        NOTION["Notion REST API"]
+    end
+
+    UI -->|"api 프록시"| Backend
+    TR -->|"multipart 오디오"| MAGO
+    EV -->|"평가 프롬프트"| OAI
+    NO -->|"페이지 조회"| NOTION
+    NO -.->|"평가 컨텍스트"| EV
+```
+
+## 🔁 퀘스트 진행 흐름
+
+```mermaid
+sequenceDiagram
+    participant U as 👤 사용자
+    participant A as 💬 AI Agent UI
+    participant S as 🖥️ Backend
+    participant M as Mago STT
+    participant O as OpenAI
+
+    U->>A: 데모 계정 선택
+    A-->>U: 환영 + "시작" 버튼 안내
+    U->>A: ▶ 퀘스트 시작
+    loop 질문 6개
+        A-->>U: 질문 제시 (🎙️ 마이크 자동 ON)
+        U->>A: 음성/텍스트 답변
+        opt 음성 답변
+            A->>S: WAV 업로드
+            S->>M: 음성 인식 요청
+            M-->>S: 텍스트
+            S-->>A: 전사 결과 → 자동 제출
+        end
+        A->>S: 답변 평가 요청
+        S->>O: 평가(실패 시 로컬 fallback)
+        O-->>S: 점수 + 강점/보완점
+        S-->>A: 평가 결과
+        A-->>U: 점수 + 피드백
+    end
+    A-->>U: 📋 최종 리포트 (잘한 점/보완점) + 🏅 배지
+    U->>A: ▶ 다음 퀘스트
+```
 
 ## 빠른 시작
 
@@ -111,11 +211,13 @@ node --check server/index.js     # backend 문법 검사
 ## 데모 시나리오
 
 1. 데모 계정을 선택합니다.
-2. Agent가 Quest 1의 첫 질문을 제시합니다.
-3. 텍스트로 답하거나 🎙️ 버튼으로 음성 답변합니다.
-4. 답변이 평가되어 점수(0/1/2)와 피드백이 표시됩니다.
-5. 각 퀘스트의 6개 질문을 마치면 누적 점수로 배지를 판정합니다.
-6. 3개 퀘스트를 모두 마치면 진행률, 획득 배지, 대화 기록을 확인합니다.
+2. 퀘스트 목록의 **`▶ 시작`** 버튼을 눌러 Quest 1을 시작합니다.
+3. Agent가 첫 질문을 제시하면 🎙️ 마이크가 자동으로 켜집니다.
+4. 텍스트로 답하거나 음성으로 답변합니다. (음성은 인식 후 자동 제출)
+5. 답변이 평가되어 점수(0/1/2)와 피드백이 표시됩니다.
+6. 6개 질문을 마치면 **최종 평가 리포트**(점수 · 잘한 점 · 보완할 점 · 배지)가 나옵니다.
+7. **`▶ 다음 퀘스트`** 버튼을 눌러 다음 퀘스트를 진행합니다.
+8. 3개 퀘스트를 모두 마치면 진행률, 획득 배지, 대화 기록을 확인합니다.
 
 > "예시 보기" 버튼으로 모범 답안을 입력란에 채워 빠르게 시연할 수 있습니다.
 

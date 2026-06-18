@@ -37,6 +37,18 @@ export interface Evaluation {
 
 export type ChatRole = "agent" | "user" | "system";
 
+// 퀘스트 종료 시 보여주는 최종 평가 리포트.
+export interface QuestReport {
+  questTitle: string;
+  badge: string;
+  badgeEmoji: string;
+  earnedBadge: boolean;
+  totalScore: number;
+  maxScore: number;
+  strengths: string[];
+  improvements: string[];
+}
+
 export interface ChatMessage {
   id: string;
   role: ChatRole;
@@ -45,6 +57,8 @@ export interface ChatMessage {
   evaluation?: Evaluation;
   // 음성 답변 여부
   viaVoice?: boolean;
+  // 퀘스트 최종 평가 리포트 메시지일 경우.
+  report?: QuestReport;
   createdAt: number;
 }
 
@@ -52,6 +66,9 @@ export interface QuestProgress {
   questId: string;
   // 질문 id -> 획득 점수
   scores: Record<string, number>;
+  // 퀘스트 진행 중 누적된 잘한 점 / 보완할 점 (최종 리포트용)
+  strengths: string[];
+  improvements: string[];
   completed: boolean;
   earnedBadge: boolean;
 }
@@ -60,6 +77,9 @@ export interface SessionState {
   accountId: string;
   currentQuestIndex: number;
   currentQuestionIndex: number;
+  // 현재 퀘스트가 시작되어 대화가 진행 중인지 여부.
+  // false 이면 "시작 / 다음 퀘스트" 버튼을 눌러야 진행됩니다.
+  questStarted: boolean;
   progress: Record<string, QuestProgress>;
   messages: ChatMessage[];
   finished: boolean;

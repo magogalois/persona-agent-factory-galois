@@ -376,6 +376,106 @@ button {
   font-weight: 600;
 }
 
+/* ---------- Start / Next quest banner ---------- */
+.start-banner {
+  border-top: 1px solid var(--border);
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--bg-soft);
+}
+.start-banner-info {
+  min-width: 0;
+}
+.start-banner-title {
+  margin: 0 0 4px;
+  font-weight: 700;
+  font-size: 16px;
+}
+.start-banner .muted {
+  margin: 0;
+}
+.start-banner .primary-btn {
+  white-space: nowrap;
+}
+
+/* ---------- Quest final report card ---------- */
+.report-card {
+  align-self: center;
+  width: min(560px, 100%);
+  margin: 6px auto;
+  background: linear-gradient(160deg, var(--panel) 0%, var(--panel-2) 100%);
+  border: 1px solid var(--primary-2);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  box-shadow: var(--shadow);
+}
+.report-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.report-icon {
+  font-size: 26px;
+}
+.report-title {
+  margin: 0;
+  font-weight: 700;
+  font-size: 16px;
+}
+.report-score {
+  margin: 2px 0 0;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 14px;
+}
+.report-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+.report-badge.earned {
+  background: rgba(0, 210, 168, 0.14);
+  border: 1px solid var(--accent);
+  color: var(--text);
+}
+.report-badge.missed {
+  background: rgba(154, 160, 199, 0.1);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.report-badge-emoji {
+  font-size: 22px;
+}
+.report-section {
+  margin-top: 10px;
+}
+.report-section h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.report-section ul {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.report-section li {
+  font-size: 14px;
+  line-height: 1.45;
+}
+.report-section .muted {
+  margin: 0;
+}
+
 /* ---------- Side panel ---------- */
 .side-panel {
   display: flex;
@@ -446,8 +546,30 @@ button {
 .quest-item.done {
   border-color: var(--accent);
 }
+.quest-item.ready {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.quest-item.partial {
+  border-color: var(--warn);
+}
 .quest-item.locked {
   opacity: 0.55;
+}
+.quest-start-btn {
+  margin-top: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--accent), var(--primary-2));
+  color: #0f1226;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+.quest-start-btn:hover {
+  filter: brightness(1.05);
 }
 .quest-item-head {
   display: flex;

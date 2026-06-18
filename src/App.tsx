@@ -3,12 +3,13 @@ import { DEMO_ACCOUNTS, QUESTS } from "./quests";
 import type {
   ChatMessage,
   DemoAccount,
+  QuestReport,
   SessionState,
 } from "./types";
 import { evaluateAnswer, transcribeAudio } from "./api";
 import { useRecorder } from "./useRecorder";
 
-const STORAGE_KEY = "mago-onboarding-session-v1";
+const STORAGE_KEY = "mago-onboarding-session-v2";
 
 const TOTAL_QUESTIONS = QUESTS.reduce((sum, q) => sum + q.questions.length, 0);
 
@@ -18,12 +19,13 @@ function uid(): string {
 
 function createSession(accountId: string): SessionState {
   const firstQuest = QUESTS[0];
-  const firstQuestion = firstQuest.questions[0];
   const progress: SessionState["progress"] = {};
   for (const quest of QUESTS) {
     progress[quest.id] = {
       questId: quest.id,
       scores: {},
+      strengths: [],
+      improvements: [],
       completed: false,
       earnedBadge: false,
     };
@@ -32,19 +34,14 @@ function createSession(accountId: string): SessionState {
     accountId,
     currentQuestIndex: 0,
     currentQuestionIndex: 0,
+    questStarted: false,
     progress,
     finished: false,
     messages: [
       {
         id: uid(),
-        role: "system",
-        text: `${firstQuest.title} 을 시작합니다. ${firstQuest.description}`,
-        createdAt: Date.now(),
-      },
-      {
-        id: uid(),
         role: "agent",
-        text: `안녕하세요! Mago 온보딩 코치예요. 첫 번째 질문이에요.\n\n${firstQuestion.text}`,
+        text: `안녕하세요! Mago 온보딩 코치예요. 첫 번째 퀘스트는 "${firstQuest.title}" 입니다.\n\n오른쪽 퀘스트 목록의 "시작" 버튼을 누르면 대화를 시작해요.`,
         createdAt: Date.now(),
       },
     ],
@@ -95,9 +92,9 @@ export default function App() {
       ? currentQuest.questions[session.currentQuestionIndex]
       : null;
 
-  // 현재 질문 식별자 (질문이 바뀌면 값이 바뀜). 완료/세션없음이면 null.
+  // 현재 질문 식별자 (질문이 바뀌면 값이 바뀜). 미시작/완료/세션없음이면 null.
   const questionKey =
-    session && !session.finished
+    session && session.questStarted && !session.finished
       ? `${session.currentQuestIndex}-${session.currentQuestionIndex}`
       : null;
 
@@ -149,6 +146,35 @@ export default function App() {
     setStatusNote(null);
   }, []);
 
+  // 현재 퀘스트를 시작합니다(시작 / 다음 퀘스트 버튼). 첫 질문을 제시하고 대화를 엽니다.
+  const startQuest = useCallback(() => {
+    setAnswer("");
+    setStatusNote(null);
+    setSession((prev) => {
+      if (!prev || prev.finished || prev.questStarted) return prev;
+      const quest = QUESTS[prev.currentQuestIndex];
+      const firstQuestion = quest.questions[0];
+      const intro: ChatMessage = {
+        id: uid(),
+        role: "system",
+        text: `${quest.title} 시작 — ${quest.description}`,
+        createdAt: Date.now(),
+      };
+      const firstQ: ChatMessage = {
+        id: uid(),
+        role: "agent",
+        text: `첫 번째 질문이에요 (1/${quest.questions.length}).\n\n${firstQuestion.text}`,
+        createdAt: Date.now(),
+      };
+      return {
+        ...prev,
+        questStarted: true,
+        currentQuestionIndex: 0,
+        messages: [...prev.messages, intro, firstQ],
+      };
+    });
+  }, []);
+
   const appendMessages = useCallback(
     (prev: SessionState, msgs: ChatMessage[]): ChatMessage[] => [
       ...prev.messages,
@@ -193,6 +219,11 @@ export default function App() {
             ...prev.progress[quest.id].scores,
             [question.id]: evaluation.score,
           },
+          strengths: [...prev.progress[quest.id].strengths, ...evaluation.strengths],
+          improvements: [
+            ...prev.progress[quest.id].improvements,
+            ...evaluation.improvements,
+          ],
         };
 
         const feedbackLines: string[] = [
@@ -240,22 +271,39 @@ export default function App() {
           };
         }
 
-        // 퀘스트의 마지막 질문 처리: 누적 점수로 배지 판정.
+        // 퀘스트의 마지막 질문 처리: 누적 점수로 배지 판정 + 최종 평가 리포트.
         const total = Object.values(questProgress.scores).reduce(
           (s, v) => s + v,
           0
         );
+        const maxScore = quest.questions.length * 2;
         const passed = total >= quest.passingScore;
         questProgress.completed = true;
         questProgress.earnedBadge = passed;
         newProgress[quest.id] = questProgress;
 
+        const uniqStrengths = Array.from(new Set(questProgress.strengths))
+          .filter(Boolean)
+          .slice(0, 6);
+        const uniqImprovements = Array.from(new Set(questProgress.improvements))
+          .filter(Boolean)
+          .slice(0, 6);
+
+        // 최종 평가 리포트 메시지 (잘한 점 / 못한 점 + 배지)
         extraMessages.push({
           id: uid(),
-          role: "system",
-          text: passed
-            ? `🎉 "${quest.title}" 완료! 누적 ${total}점으로 배지 "${quest.badgeEmoji} ${quest.badge}" 를 획득했어요.`
-            : `"${quest.title}" 의 질문을 모두 마쳤어요. 누적 ${total}점 (배지 기준 ${quest.passingScore}점). 배지는 다음 기회에 다시 도전해 보세요!`,
+          role: "agent",
+          text: "",
+          report: {
+            questTitle: quest.title,
+            badge: quest.badge,
+            badgeEmoji: quest.badgeEmoji,
+            earnedBadge: passed,
+            totalScore: total,
+            maxScore,
+            strengths: uniqStrengths,
+            improvements: uniqImprovements,
+          },
           createdAt: Date.now(),
         });
 
@@ -263,29 +311,25 @@ export default function App() {
         if (isLastQuest) {
           extraMessages.push({
             id: uid(),
-            role: "agent",
+            role: "system",
             text: "모든 퀘스트를 완료했어요! 오른쪽에서 진행률과 획득 배지를 확인하세요. 수고하셨습니다 👏",
             createdAt: Date.now(),
           });
           return {
             ...prev,
             progress: newProgress,
+            questStarted: false,
             finished: true,
             messages: appendMessages(prev, extraMessages),
           };
         }
 
+        // 다음 퀘스트로 인덱스만 이동하고, 시작은 사용자가 "다음 퀘스트" 버튼으로 합니다.
         const nextQuest = QUESTS[prev.currentQuestIndex + 1];
         extraMessages.push({
           id: uid(),
           role: "system",
-          text: `${nextQuest.title} 을 시작합니다. ${nextQuest.description}`,
-          createdAt: Date.now(),
-        });
-        extraMessages.push({
-          id: uid(),
-          role: "agent",
-          text: `새 퀘스트의 첫 질문이에요 (1/${nextQuest.questions.length}).\n\n${nextQuest.questions[0].text}`,
+          text: `다음 퀘스트는 "${nextQuest.title}" 입니다. 오른쪽 퀘스트 목록의 "다음 퀘스트" 버튼을 눌러 계속 진행하세요.`,
           createdAt: Date.now(),
         });
 
@@ -294,6 +338,7 @@ export default function App() {
           progress: newProgress,
           currentQuestIndex: prev.currentQuestIndex + 1,
           currentQuestionIndex: 0,
+          questStarted: false,
           messages: appendMessages(prev, extraMessages),
         };
       });
@@ -391,7 +436,14 @@ export default function App() {
             <div className="status-note warn">{recorder.error}</div>
           )}
 
-          {!session.finished ? (
+          {session.finished ? (
+            <div className="finished-banner">
+              <p>🏁 모든 퀘스트를 완료했어요!</p>
+              <button className="primary-btn" onClick={resetDemo}>
+                새 데모 시작
+              </button>
+            </div>
+          ) : session.questStarted ? (
             <form className="composer" onSubmit={handleTextSubmit}>
               <textarea
                 value={answer}
@@ -433,10 +485,17 @@ export default function App() {
               </div>
             </form>
           ) : (
-            <div className="finished-banner">
-              <p>🏁 모든 퀘스트를 완료했어요!</p>
-              <button className="primary-btn" onClick={resetDemo}>
-                새 데모 시작
+            <div className="start-banner">
+              <div className="start-banner-info">
+                <p className="start-banner-title">
+                  {currentQuest?.badgeEmoji} {currentQuest?.title}
+                </p>
+                <p className="muted">{currentQuest?.description}</p>
+              </div>
+              <button className="primary-btn" onClick={startQuest}>
+                {session.currentQuestIndex === 0
+                  ? "▶ 퀘스트 시작"
+                  : "▶ 다음 퀘스트 시작"}
               </button>
             </div>
           )}
@@ -455,13 +514,18 @@ export default function App() {
               {QUESTS.map((quest, idx) => {
                 const p = session.progress[quest.id];
                 const total = Object.values(p.scores).reduce((s, v) => s + v, 0);
-                const isCurrent = idx === session.currentQuestIndex && !session.finished;
+                const isCurrent =
+                  idx === session.currentQuestIndex && !session.finished;
+                const inProgress = isCurrent && session.questStarted;
+                const readyToStart = isCurrent && !session.questStarted;
                 const state = p.completed
                   ? p.earnedBadge
                     ? "done"
                     : "partial"
-                  : isCurrent
+                  : inProgress
                   ? "current"
+                  : readyToStart
+                  ? "ready"
                   : "locked";
                 return (
                   <li key={quest.id} className={`quest-item ${state}`}>
@@ -472,12 +536,19 @@ export default function App() {
                     <div className="quest-meta">
                       {p.completed
                         ? `${total} / ${quest.questions.length * 2}점 · ${
-                            p.earnedBadge ? "배지 획득" : "배지 미획득"
+                            p.earnedBadge ? "배지 획득 🏅" : "배지 미획득"
                           }`
-                        : isCurrent
+                        : inProgress
                         ? `진행 중 · 질문 ${session.currentQuestionIndex + 1}/${quest.questions.length}`
+                        : readyToStart
+                        ? "시작 대기 중"
                         : "대기 중"}
                     </div>
+                    {readyToStart && (
+                      <button className="quest-start-btn" onClick={startQuest}>
+                        {idx === 0 ? "▶ 시작" : "▶ 다음 퀘스트"}
+                      </button>
+                    )}
                   </li>
                 );
               })}
@@ -576,6 +647,9 @@ function MessageBubble({
   if (message.role === "system") {
     return <div className="system-msg">{message.text}</div>;
   }
+  if (message.report) {
+    return <ReportCard report={message.report} />;
+  }
   const isUser = message.role === "user";
   return (
     <div className={`msg-row ${isUser ? "user" : "agent"}`}>
@@ -589,6 +663,60 @@ function MessageBubble({
           <div className={`score-pill score-${message.evaluation.score}`}>
             {message.evaluation.score} / 2
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ReportCard({ report }: { report: QuestReport }) {
+  const percent = Math.round((report.totalScore / report.maxScore) * 100);
+  return (
+    <div className="report-card">
+      <div className="report-head">
+        <span className="report-icon">📋</span>
+        <div>
+          <p className="report-title">최종 평가 · {report.questTitle}</p>
+          <p className="report-score">
+            점수 {report.totalScore} / {report.maxScore} ({percent}%)
+          </p>
+        </div>
+      </div>
+
+      <div className={`report-badge ${report.earnedBadge ? "earned" : "missed"}`}>
+        <span className="report-badge-emoji">
+          {report.earnedBadge ? report.badgeEmoji : "🔒"}
+        </span>
+        <span>
+          {report.earnedBadge
+            ? `배지 획득: ${report.badge}`
+            : `배지 미획득 (다음에 다시 도전해 보세요)`}
+        </span>
+      </div>
+
+      <div className="report-section">
+        <h4>👍 잘한 점</h4>
+        {report.strengths.length > 0 ? (
+          <ul>
+            {report.strengths.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">기록된 강점이 없어요. 다음엔 더 구체적으로 답해보세요.</p>
+        )}
+      </div>
+
+      <div className="report-section">
+        <h4>📌 보완할 점</h4>
+        {report.improvements.length > 0 ? (
+          <ul>
+            {report.improvements.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">특별히 보완할 점이 없어요. 훌륭합니다!</p>
         )}
       </div>
     </div>
