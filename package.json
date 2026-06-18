@@ -1,0 +1,26 @@
+{
+  "name": "mago-onboarding-voice-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Mago 신규 입사자를 위한 온보딩 음성 AI Agent 데모 서비스",
+  "scripts": {
+    "dev": "vite",
+    "dev:server": "node server/index.js",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "check:server": "node --check server/index.js",
+    "check:types": "tsc -b"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}

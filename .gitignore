@@ -147,8 +147,15 @@ activemq-data/
 # SageMath parsed files
 *.sage.py
 
+# Node / Vite (Mago 온보딩 Agent 데모)
+node_modules/
+.tmp/
+*.tsbuildinfo
+vite.config.ts.timestamp-*
+
 # Environments
 .env
+.env.local
 .envrc
 .venv
 env/
